@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+import Foundation
+
 public protocol HTTPLoggerConfigurationType {
     var bodyTrimLength: Int { get }
     func printLog(_ string: String)
@@ -219,16 +221,24 @@ public final class HTTPLogger: URLProtocol, URLSessionDelegate {
         
         guard let data = data else { return }
         
-        do {
-            let json = try JSONSerialization.jsonObject(with: data, options: .mutableContainers)
-            let pretty = try JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+        if let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type"), contentType.contains(/gzip/) {
             
-            if let string = NSString(data: pretty, encoding: String.Encoding.utf8.rawValue) {
-                logString += "\nJSON: \n\(string)"
+            do {
+                let json = try JSONSerialization.jsonObject(with: data, options: .mutableContainers)
+                let pretty = try JSONSerialization.data(withJSONObject: json, options: .prettyPrinted)
+                
+                if let string = NSString(data: pretty, encoding: String.Encoding.utf8.rawValue) {
+                    logString += "\nJSON: \n\(string)"
+                }
             }
-        }
-        catch {
-            if let string = NSString(data: data, encoding: String.Encoding.utf8.rawValue) {
+            catch {
+                if let string = String(data: data, encoding: .utf8) {
+                    logString += "\nData: \n\(string)"
+                    HTTPLogger.configuration.printLog(logString)
+                }
+            }
+        } else {
+            if let string = String(data: data, encoding: .utf8) {
                 logString += "\nData: \n\(string)"
             }
         }
@@ -258,11 +268,13 @@ public final class HTTPLogger: URLProtocol, URLSessionDelegate {
     
     fileprivate func trimTextOverflow(_ string: String, length: Int) -> String {
         
-        guard string.characters.count > length else {
+        guard string.lengthOfBytes(using: .utf8) > length else {
             return string
         }
         
-        return string.substring(to: string.characters.index(string.startIndex, offsetBy: length)) + "…"
+        let index=string.index(string.startIndex, offsetBy: length)
+        //return string.substring(to: string.characters.index(string.startIndex, offsetBy: length)) + "…"
+        return string.prefix(upTo: index) + "…"
     }
 }
 
