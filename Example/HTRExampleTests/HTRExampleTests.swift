@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import HTTPTrafficReplayer
 @testable import HTRExample
 
 final class HTRExampleTests: XCTestCase {
@@ -25,8 +26,15 @@ final class HTRExampleTests: XCTestCase {
         // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
         // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
         
-        let config = URLSessionConfiguration.default
-        let session = URLSession(configuration: config)
+        let urlConfig = URLSessionConfiguration.default
+        var htrConfig = HTTPTrafficReplayerDefaultConfiguration()
+        htrConfig.behavior = .logOnly
+        HTTPTrafficReplayer.configuration = htrConfig
+        URLProtocol.registerClass(HTTPTrafficReplayer.self)
+        var protocolClasses = urlConfig.protocolClasses ?? [AnyClass]()
+        protocolClasses.insert(HTTPTrafficReplayer.self, at: 0)
+        urlConfig.protocolClasses = protocolClasses
+        let session = URLSession(configuration: urlConfig)
         let pointURL = URL(string: "https://api.weather.gov/points/39.7456%2C-97.0892")!
         var pointReq = URLRequest(url: pointURL)
         pointReq.setValue("HTRExampleTest v 1.0", forHTTPHeaderField: "User-Agent")

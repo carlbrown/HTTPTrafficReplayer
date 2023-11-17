@@ -37,29 +37,29 @@ public protocol HTTPTrafficReplayerConfigurationType {
 }
 
 @available(macOS 10.15, *)
-extension HTTPTrafficReplayerConfigurationType {
+public extension HTTPTrafficReplayerConfigurationType {
     
-    public var behavior: HTTPTrafficReplayer.Behavior {
+    var behavior: HTTPTrafficReplayer.Behavior {
         return .logOnly
     }
     
-    public var recordingDirectory: URL? {
+    var recordingDirectory: URL? {
             return nil
     }
     
-    public var filePrefix: String {
+    var filePrefix: String {
             return "network-traffic"
     }
     
-    public var bodyTrimLength: Int {
+    var bodyTrimLength: Int {
             return 1000
     }
         
-    public func printLog(_ string: String) {
+    func printLog(_ string: String) {
         print(string)
     }
     
-    public func enableCapture(_ request: URLRequest) -> Bool {
+    func enableCapture(_ request: URLRequest) -> Bool {
         #if DEBUG
             return true
         #else
@@ -67,11 +67,11 @@ extension HTTPTrafficReplayerConfigurationType {
         #endif
     }
     
-    public func incrementSequence(_ request: URLRequest) -> Int? {
+    func incrementSequence(_ request: URLRequest) -> Int? {
         return nil
     }
 
-    public func fileNameWithoutExtension(_ request: URLRequest) -> String? {
+    func fileNameWithoutExtension(_ request: URLRequest) -> String? {
         return nil
     }
     
@@ -134,6 +134,7 @@ public class HTTPTrafficReplayerDefaultConfiguration: HTTPTrafficReplayerConfigu
         return retVal
     }
 
+    public init() {}
 }
 
 @available(macOS 10.15, *)
