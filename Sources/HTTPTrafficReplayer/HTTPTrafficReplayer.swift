@@ -24,6 +24,7 @@
 
 import Foundation
 
+@available(macOS 10.15, *)
 public protocol HTTPTrafficReplayerConfigurationType {
     var behavior: HTTPTrafficReplayer.Behavior { get }
     var recordingDirectory: URL? { get }
@@ -35,6 +36,7 @@ public protocol HTTPTrafficReplayerConfigurationType {
     func fileNameWithoutExtension(_ request: URLRequest) -> String?
 }
 
+@available(macOS 10.15, *)
 extension HTTPTrafficReplayerConfigurationType {
     
     public var behavior: HTTPTrafficReplayer.Behavior {
@@ -82,6 +84,7 @@ public enum HTTPTrafficReplayerError: Error {
 }
 
 
+@available(macOS 10.15, *)
 public class HTTPTrafficReplayerDefaultConfiguration: HTTPTrafficReplayerConfigurationType {
     // just log by default
     public var behavior: HTTPTrafficReplayer.Behavior = .logOnly
@@ -133,6 +136,7 @@ public class HTTPTrafficReplayerDefaultConfiguration: HTTPTrafficReplayerConfigu
 
 }
 
+@available(macOS 10.15, *)
 public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
     
     // MARK: - Public
@@ -368,7 +372,7 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
         
         guard let data = data else { return }
         
-        if let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type"), contentType.contains(/gzip/) {
+        if let contentType = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type"), contentType.contains("/gzip/") {
             
             do {
                 let json = try JSONSerialization.jsonObject(with: data, options: .mutableContainers)
