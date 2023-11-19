@@ -24,18 +24,16 @@
 
 import Foundation
 
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 public protocol HTTPTrafficReplayerConfigurationType {
     var behavior: HTTPTrafficReplayer.Behavior { get }
     var recordingDirectory: URL? { get }
     var filePrefix: String { get }
-    var bodyTrimLength: Int { get }
-    func printLog(_ string: String)
-    func enableCapture(_ request: URLRequest) -> Bool
-    func incrementSequence(_ request: URLRequest) -> Int?
-    func fileNameWithoutExtension(_ request: URLRequest) -> String?
+    var overrides: HTTPTrafficReplayer.ConfigurationOverrides { get }
 }
 
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 public extension HTTPTrafficReplayerConfigurationType {
     
@@ -47,34 +45,37 @@ public extension HTTPTrafficReplayerConfigurationType {
             return nil
     }
     
-    var filePrefix: String {
-            return "network-traffic"
-    }
-    
-    var bodyTrimLength: Int {
-            return 1000
-    }
+    var overrides: HTTPTrafficReplayer.ConfigurationOverrides {
+        var filePrefix: String {
+                return "network-traffic"
+        }
         
-    func printLog(_ string: String) {
-        print(string)
-    }
-    
-    func enableCapture(_ request: URLRequest) -> Bool {
-        #if DEBUG
-            return true
-        #else
-            return false
-        #endif
-    }
-    
-    func incrementSequence(_ request: URLRequest) -> Int? {
-        return nil
-    }
+        var bodyTrimLength: Int {
+                return 1000
+        }
+            
+        func printLog(_ string: String) {
+            print(string)
+        }
+        
+        func enableCapture(_ request: URLRequest) -> Bool {
+            #if DEBUG
+                return true
+            #else
+                return false
+            #endif
+        }
+        
+        func incrementSequence(_ request: URLRequest) -> Int? {
+            return nil
+        }
 
-    func fileNameWithoutExtension(_ request: URLRequest) -> String? {
-        return nil
+        func fileNameWithoutExtension(_ request: URLRequest) -> String? {
+            return nil
+        }
+
+        return HTTPTrafficReplayer.ConfigurationOverrides(bodyTrimLength: bodyTrimLength, printLog: printLog(_:), enableCapture: enableCapture(_:), incrementSequence: incrementSequence(_:), fileNameWithoutExtension: fileNameWithoutExtension(_:))
     }
-    
 }
 
 public enum HTTPTrafficReplayerError: Error {
@@ -85,17 +86,20 @@ public enum HTTPTrafficReplayerError: Error {
 
 
 @available(macOS 10.15, *)
+@available(iOS 13.0, *)
 public class HTTPTrafficReplayerDefaultConfiguration: HTTPTrafficReplayerConfigurationType {
     // just log by default
     public var behavior: HTTPTrafficReplayer.Behavior = .logOnly
     public var recordingDirectory: URL? = nil
     public var filePrefix: String = "network-traffic"
-    public var bodyTrimLength: Int = 1000
+    fileprivate var bodyTrimLength: Int = 1000
     
-    public var printLog: (_ string: String) -> Void = { string in
+    public lazy var overrides = HTTPTrafficReplayer.ConfigurationOverrides(bodyTrimLength: bodyTrimLength, printLog: printLog, enableCapture: enableCapture, incrementSequence: incrementSequence, fileNameWithoutExtension: fileNameWithoutExtension)
+    
+    fileprivate var printLog: (_ string: String) -> Void = { string in
         print(string)
     }
-    public var enableCapture: (_ request: URLRequest) -> Bool = { request in
+    fileprivate var enableCapture: (_ request: URLRequest) -> Bool = { request in
         #if DEBUG
             return true
         #else
@@ -104,10 +108,10 @@ public class HTTPTrafficReplayerDefaultConfiguration: HTTPTrafficReplayerConfigu
     }
     
     // This has to be shaerd between different instances
-    var sequenceCounter = [String: Int]()
+    fileprivate var sequenceCounter = [String: Int]()
     fileprivate var sequenceCounterConcurrencyLock = NSLock()
     
-    public lazy var incrementSequence: (_ request: URLRequest) -> Int? = { [self] request in
+    fileprivate lazy var incrementSequence: (_ request: URLRequest) -> Int? = { [self] request in
         sequenceCounterConcurrencyLock.lock()
         defer { sequenceCounterConcurrencyLock.unlock() }
         guard let requestPrefix = fileNameWithoutExtension(request) else {
@@ -123,7 +127,7 @@ public class HTTPTrafficReplayerDefaultConfiguration: HTTPTrafficReplayerConfigu
         }
     }
 
-    public lazy var fileNameWithoutExtension: (_ request: URLRequest) -> String? = { [self] request in
+    fileprivate lazy var fileNameWithoutExtension: (_ request: URLRequest) -> String? = { [self] request in
         guard let url=request.url, let method = request.httpMethod, let host = request.url?.host,
               let headers = request.allHTTPHeaderFields as? [String: AnyObject] else {
             return nil
@@ -137,6 +141,7 @@ public class HTTPTrafficReplayerDefaultConfiguration: HTTPTrafficReplayerConfigu
     public init() {}
 }
 
+@available(iOS 13.0, *)
 @available(macOS 10.15, *)
 public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
     
@@ -146,6 +151,14 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
         case logOnly
         case record
         case playback
+    }
+
+    public struct ConfigurationOverrides {
+        var bodyTrimLength: Int
+        var printLog: (_ string: String) -> Void
+        var enableCapture: (_ request: URLRequest) -> Bool
+        var incrementSequence: (_ request: URLRequest) -> Int?
+        var fileNameWithoutExtension: (_ request: URLRequest) -> String?
     }
 
     public static var configuration: HTTPTrafficReplayerConfigurationType = HTTPTrafficReplayerDefaultConfiguration()
@@ -168,7 +181,7 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
     
     public override class func canInit(with request: URLRequest) -> Bool {
         
-        guard HTTPTrafficReplayer.configuration.enableCapture(request) == true else {
+        guard HTTPTrafficReplayer.configuration.overrides.enableCapture(request) == true else {
             return false
         }
         
@@ -204,8 +217,8 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
         var sequenceNumber: Int?
         if !loggingOnly {
             do {
-                fileNamePrefix = HTTPTrafficReplayer.configuration.fileNameWithoutExtension(request)
-                sequenceNumber = HTTPTrafficReplayer.configuration.incrementSequence(request)
+                fileNamePrefix = HTTPTrafficReplayer.configuration.overrides.fileNameWithoutExtension(request)
+                sequenceNumber = HTTPTrafficReplayer.configuration.overrides.incrementSequence(request)
                 try createStorageDirectoryIfNeeded()
             } catch {
                 self.client?.urlProtocol(self, didFailWithError: error)
@@ -243,7 +256,7 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
         session.dataTask(with: request, completionHandler: { (data, response, error) -> Void in
             if self.recordingEnabled, let fileNamePrefix, let sequenceNumber {
                 do {
-                    try self.save(requestPrefix: fileNamePrefix, sequence: sequenceNumber, request: self.request, response: (response as? HTTPURLResponse))
+                    try self.save(requestPrefix: fileNamePrefix, sequence: sequenceNumber, request: self.request, response: (response as? HTTPURLResponse), body: data, error: error)
                 } catch {
                     self.client?.urlProtocol(self, didFailWithError: error)
                     return
@@ -302,12 +315,12 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
             logString += "Suggestion: \(suggestion)\n"
         }
         logString += "\n\n*************************\n\n"
-        HTTPTrafficReplayer.configuration.printLog(logString)
+        HTTPTrafficReplayer.configuration.overrides.printLog(logString)
     }
     
     public func logRequest(_ request: URLRequest?) {
         guard let request else {
-            HTTPTrafficReplayer.configuration.printLog("\n📤\nERROR: Invalid Request!!\n\n*************************\n\n")
+            HTTPTrafficReplayer.configuration.overrides.printLog("\n📤\nERROR: Invalid Request!!\n\n*************************\n\n")
             return
         }
         var logString = "\n📤"
@@ -324,7 +337,7 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
             let bodyString = NSString(data: data, encoding: String.Encoding.utf8.rawValue) {
             
             logString += "Body:\n"
-            logString += trimTextOverflow(bodyString as String, length: HTTPTrafficReplayer.configuration.bodyTrimLength)
+            logString += trimTextOverflow(bodyString as String, length: HTTPTrafficReplayer.configuration.overrides.bodyTrimLength)
         }
         
         if let dataStream = request.httpBodyStream {
@@ -341,12 +354,12 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
             
             if let bodyString = NSString(data: data as Data, encoding: String.Encoding.utf8.rawValue) {
                 logString += "Body:\n"
-                logString += trimTextOverflow(bodyString as String, length: HTTPTrafficReplayer.configuration.bodyTrimLength)
+                logString += trimTextOverflow(bodyString as String, length: HTTPTrafficReplayer.configuration.overrides.bodyTrimLength)
             }
         }
         
         logString += "\n\n*************************\n\n"
-        HTTPTrafficReplayer.configuration.printLog(logString)
+        HTTPTrafficReplayer.configuration.overrides.printLog(logString)
     }
     
     public func logResponse(_ response: URLResponse, data: Data? = nil) {
@@ -386,7 +399,7 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
             catch {
                 if let string = String(data: data, encoding: .utf8) {
                     logString += "\nData: \n\(string)"
-                    HTTPTrafficReplayer.configuration.printLog(logString)
+                    HTTPTrafficReplayer.configuration.overrides.printLog(logString)
                 }
             }
         } else {
@@ -396,7 +409,7 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
         }
         
         logString += "\n\n*************************\n\n"
-        HTTPTrafficReplayer.configuration.printLog(logString)
+        HTTPTrafficReplayer.configuration.overrides.printLog(logString)
     }
     
     public func logHeaders(_ headers: [String: AnyObject]) -> String {
@@ -470,19 +483,19 @@ public final class HTTPTrafficReplayer: URLProtocol, URLSessionDelegate {
             let bodyFileName = "\(requestPrefix)+responseBody+\(String(format: "%02d", sequence)).plist"
             let errorFileName = "\(requestPrefix)+responseError+\(String(format: "%02d", sequence)).plist"
             do {
-                let data = try NSKeyedArchiver.archivedData(
+                let requestData = try NSKeyedArchiver.archivedData(
                     withRootObject: request,
                     requiringSecureCoding: false
                 )
                 
-                try data.write(to: recordingDirectory.appendingPathComponent(requestFileName))
+                try requestData.write(to: recordingDirectory.appendingPathComponent(requestFileName))
 
                 if let response {
-                    let data = try NSKeyedArchiver.archivedData(
+                    let responseData = try NSKeyedArchiver.archivedData(
                         withRootObject: response,
                         requiringSecureCoding: false
                     )
-                    try data.write(to: recordingDirectory.appendingPathComponent(responseFileName))
+                    try responseData.write(to: recordingDirectory.appendingPathComponent(responseFileName))
                 }
                 
                 if let data = body {

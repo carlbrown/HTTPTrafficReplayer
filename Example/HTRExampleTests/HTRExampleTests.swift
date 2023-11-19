@@ -27,8 +27,10 @@ final class HTRExampleTests: XCTestCase {
         // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
         
         let urlConfig = URLSessionConfiguration.default
-        var htrConfig = HTTPTrafficReplayerDefaultConfiguration()
-        htrConfig.behavior = .logOnly
+        let htrConfig = HTTPTrafficReplayerDefaultConfiguration()
+        htrConfig.behavior = .playback
+        htrConfig.filePrefix = self.name.replacingOccurrences(of: " ", with: ".").replacingOccurrences(of: "-[", with: "").replacingOccurrences(of: "]", with: "")
+        htrConfig.recordingDirectory = URL(fileURLWithPath: #file).deletingLastPathComponent().appendingPathComponent("testResources")
         HTTPTrafficReplayer.configuration = htrConfig
         URLProtocol.registerClass(HTTPTrafficReplayer.self)
         var protocolClasses = urlConfig.protocolClasses ?? [AnyClass]()
